@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ChordLang — AST Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0a0a0f;
+    --bg2:      #12121a;
+    --bg3:      #1c1c28;
+    --border:   #2a2a3d;
+    --text:     #e8e8f0;
+    --dim:      #6b6b8a;
+    --accent:   #7c6af7;
+    --accent2:  #f76a8a;
+    --green:    #6af7b8;
+    --yellow:   #f7d96a;
+    --cyan:     #6ad4f7;
+    --orange:   #f7a56a;
+
+    /* node colours by type */
+    --c-program:    #7c6af7;
+    --c-assign:     #f7d96a;
+    --c-sequence:   #6af7b8;
+    --c-chord:      #6ad4f7;
+    --c-play:       #f76a8a;
+    --c-repeat:     #f7a56a;
+    --c-if:         #c96af7;
+    --c-branch:     #8a7aaa;
+    --c-binop:      #f7a56a;
+    --c-note:       #6af7b8;
+    --c-rest:       #6b6b8a;
+    --c-integer:    #f7d96a;
+    --c-identifier: #6ad4f7;
+    --c-default:    #8888aa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: .35;
+  }
+
+  /* ── header ── */
+  header {
+    position: relative; z-index: 10;
+    padding: 28px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 20px;
+    background: linear-gradient(180deg, #0e0e18 0%, transparent 100%);
+  }
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--dim); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ── layout ── */
+  .layout {
+    position: relative; z-index: 5;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: calc(100vh - 73px);
+  }
+
+  /* ── source panel ── */
+  .source-panel {
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-label {
+    padding: 12px 20px;
+    font-size: .65rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+  .source-code {
+    flex: 1; overflow-y: auto; padding: 20px;
+    font-size: .78rem; line-height: 1.9;
+    color: #c0c0d8;
+    white-space: pre;
+  }
+  /* syntax colouring */
+  .kw  { color: var(--accent); font-weight: 700; }
+  .nm  { color: var(--cyan); }
+  .nt  { color: var(--green); }
+  .nb  { color: var(--yellow); }
+  .cm  { color: var(--dim); font-style: italic; }
+  .op  { color: var(--orange); }
+
+  /* ── tree canvas ── */
+  .tree-panel {
+    overflow: auto;
+    position: relative;
+    background: var(--bg);
+  }
+  #canvas-wrap {
+    padding: 40px 60px 80px;
+    min-width: 100%;
+    display: inline-block;
+  }
+  svg#tree-svg {
+    overflow: visible;
+    display: block;
+  }
+
+  /* ── tooltip ── */
+  #tooltip {
+    position: fixed; z-index: 100; pointer-events: none;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+    font-size: .72rem; line-height: 1.6;
+    opacity: 0; transition: opacity .15s;
+    max-width: 220px;
+  }
+  #tooltip.show { opacity: 1; }
+  #tooltip strong { color: var(--accent); display: block; margin-bottom: 4px; }
+
+  /* ── legend ── */
+  .legend {
+    position: absolute; bottom: 20px; left: 20px; z-index: 20;
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .leg-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .62rem; color: var(--dim); letter-spacing: .04em;
+  }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Chord<span>Lang</span></h1>
+  <p>Abstract Syntax Tree — sample program</p>
+</header>
+
+<div class="layout">
+
+  <!-- Source panel -->
+  <aside class="source-panel">
+    <div class="panel-label">Source · sample.chord</div>
+    <div class="source-code"><span class="cm"># A mildly complex ChordLang program</span>
+<span class="kw">tempo</span>  <span class="op">=</span> <span class="nb">140</span>
+<span class="kw">volume</span> <span class="op">=</span> <span class="nb">85</span>
+
+<span class="kw">sequence</span> <span class="nm">intro</span>  { <span class="nt">C4</span>, <span class="nt">E4</span>, <span class="nt">G4</span>:2, rest:1, <span class="nt">A4</span>, <span class="nt">G4</span> }
+<span class="kw">sequence</span> <span class="nm">bridge</span> { <span class="nt">F4</span>, <span class="nt">A4</span>, <span class="nt">C5</span>:2, rest:1 }
+
+<span class="kw">chord</span> <span class="nm">Cmaj</span> { <span class="nt">C4</span>, <span class="nt">E4</span>, <span class="nt">G4</span> }
+<span class="kw">chord</span> <span class="nm">Amin</span> { <span class="nt">A3</span>, <span class="nt">C4</span>, <span class="nt">E4</span> }
+
+<span class="kw">repeat</span> <span class="nb">2</span> <span class="kw">times</span> {
+    <span class="kw">play</span> <span class="nm">intro</span>
+    <span class="kw">play</span> <span class="nm">Cmaj</span>
+}
+
+<span class="kw">if</span> <span class="kw">tempo</span> <span class="op">&gt;</span> <span class="nb">120</span> <span class="kw">then</span> {
+    <span class="kw">play</span> <span class="nm">bridge</span>
+    <span class="kw">play</span> <span class="nm">Amin</span>
+} <span class="kw">else</span> {
+    <span class="kw">play</span> <span class="nm">intro</span>
+}</div>
+  </aside>
+
+  <!-- Tree panel -->
+  <main class="tree-panel" id="tree-panel">
+    <div id="canvas-wrap">
+      <svg id="tree-svg"></svg>
+    </div>
+
+    <div class="legend" id="legend"></div>
+  </main>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+// ── AST data ───────────────────────────────────────────────────────────────
+const AST = {
+  type:"Program", label:"Program",
+  children:[
+    { type:"Assignment", label:"tempo =", name:"tempo",
+      children:[{ type:"Integer", label:"140", value:140, children:[] }]},
+    { type:"Assignment", label:"volume =", name:"volume",
+      children:[{ type:"Integer", label:"85",  value:85,  children:[] }]},
+    { type:"Sequence", label:"sequence intro", name:"intro",
+      children:[
+        { type:"Note", label:"C4",     children:[] },
+        { type:"Note", label:"E4",     children:[] },
+        { type:"Note", label:"G4:2",   children:[] },
+        { type:"Rest", label:"rest:1", children:[] },
+        { type:"Note", label:"A4",     children:[] },
+        { type:"Note", label:"G4",     children:[] },
+      ]},
+    { type:"Sequence", label:"sequence bridge", name:"bridge",
+      children:[
+        { type:"Note", label:"F4",     children:[] },
+        { type:"Note", label:"A4",     children:[] },
+        { type:"Note", label:"C5:2",   children:[] },
+        { type:"Rest", label:"rest:1", children:[] },
+      ]},
+    { type:"Chord", label:"chord Cmaj", name:"Cmaj",
+      children:[
+        { type:"Note", label:"C4", children:[] },
+        { type:"Note", label:"E4", children:[] },
+        { type:"Note", label:"G4", children:[] },
+      ]},
+    { type:"Chord", label:"chord Amin", name:"Amin",
+      children:[
+        { type:"Note", label:"A3", children:[] },
+        { type:"Note", label:"C4", children:[] },
+        { type:"Note", label:"E4", children:[] },
+      ]},
+    { type:"Repeat", label:"repeat … times",
+      children:[
+        { type:"RepeatCount", label:"count",
+          children:[{ type:"Integer", label:"2", value:2, children:[] }]},
+        { type:"RepeatBody", label:"body",
+          children:[
+            { type:"Play", label:"play", children:[{ type:"Identifier", label:"intro", children:[] }]},
+            { type:"Play", label:"play", children:[{ type:"Identifier", label:"Cmaj",  children:[] }]},
+          ]},
+      ]},
+    { type:"If", label:"if … then … else",
+      children:[
+        { type:"IfCondition", label:"condition",
+          children:[{
+            type:"BinaryOp", label:">", operator:">",
+            children:[
+              { type:"Identifier", label:"tempo", children:[] },
+              { type:"Integer",    label:"120",   value:120, children:[] },
+            ]
+          }]},
+        { type:"ThenBranch", label:"then",
+          children:[
+            { type:"Play", label:"play", children:[{ type:"Identifier", label:"bridge", children:[] }]},
+            { type:"Play", label:"play", children:[{ type:"Identifier", label:"Amin",   children:[] }]},
+          ]},
+        { type:"ElseBranch", label:"else",
+          children:[
+            { type:"Play", label:"play", children:[{ type:"Identifier", label:"intro", children:[] }]},
+          ]},
+      ]},
+  ]
+};
+
+// ── colour map ────────────────────────────────────────────────────────────
+const COLORS = {
+  Program:     "#7c6af7",
+  Assignment:  "#f7d96a",
+  Sequence:    "#6af7b8",
+  Chord:       "#6ad4f7",
+  Play:        "#f76a8a",
+  Repeat:      "#f7a56a",
+  RepeatCount: "#f7a56a",
+  RepeatBody:  "#f7a56a",
+  If:          "#c96af7",
+  IfCondition: "#c96af7",
+  ThenBranch:  "#9a7ac7",
+  ElseBranch:  "#9a7ac7",
+  BinaryOp:    "#f7a56a",
+  Note:        "#6af7b8",
+  Rest:        "#6b6b8a",
+  Integer:     "#f7d96a",
+  Identifier:  "#6ad4f7",
+};
+const color = t => COLORS[t] || "#8888aa";
+
+// ── layout constants ──────────────────────────────────────────────────────
+const NODE_W   = 112;
+const NODE_H   = 36;
+const H_GAP    = 18;   // horizontal gap between sibling subtrees
+const V_GAP    = 64;   // vertical gap between levels
+const RADIUS   = 7;
+
+// ── Reingold-Tilford inspired layout ─────────────────────────────────────
+function layout(node, depth = 0) {
+  node._depth = depth;
+  if (!node.children || node.children.length === 0) {
+    node._w = NODE_W;
+    node._x = 0;
+    return;
+  }
+  node.children.forEach(c => layout(c, depth + 1));
+  // total width = sum of children widths + gaps
+  const total = node.children.reduce((s, c) => s + c._w, 0)
+              + H_GAP * (node.children.length - 1);
+  node._w = Math.max(NODE_W, total);
+
+  // position children relative to parent
+  let x = -(total / 2);
+  node.children.forEach(c => {
+    c._x = x + c._w / 2;
+    x += c._w + H_GAP;
+  });
+}
+
+function assignAbsolute(node, parentX = 0, parentY = 0) {
+  node.ax = parentX + (node._x || 0);
+  node.ay = parentY;
+  if (node.children) {
+    node.children.forEach(c =>
+      assignAbsolute(c, node.ax, parentY + NODE_H + V_GAP)
+    );
+  }
+}
+
+function allNodes(node, acc = []) {
+  acc.push(node);
+  if (node.children) node.children.forEach(c => allNodes(c, acc));
+  return acc;
+}
+
+function allEdges(node, acc = []) {
+  if (node.children) {
+    node.children.forEach(c => {
+      acc.push({ parent: node, child: c });
+      allEdges(c, acc);
+    });
+  }
+  return acc;
+}
+
+// ── SVG helpers ───────────────────────────────────────────────────────────
+const SVG_NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+
+// ── render ────────────────────────────────────────────────────────────────
+function render() {
+  layout(AST);
+  assignAbsolute(AST, 0, 0);
+
+  const nodes = allNodes(AST);
+  const edges = allEdges(AST);
+
+  // bounding box
+  const xs = nodes.map(n => n.ax);
+  const ys = nodes.map(n => n.ay);
+  const minX = Math.min(...xs) - NODE_W / 2 - 20;
+  const maxX = Math.max(...xs) + NODE_W / 2 + 20;
+  const maxY = Math.max(...ys) + NODE_H + 20;
+
+  const W = maxX - minX;
+  const H = maxY;
+
+  const svg = document.getElementById("tree-svg");
+  svg.setAttribute("width",  W);
+  svg.setAttribute("height", H);
+  svg.setAttribute("viewBox", `${minX} 0 ${W} ${H}`);
+  svg.innerHTML = "";
+
+  // defs: glow filters
+  const defs = el("defs");
+  const filter = el("filter", { id: "glow", x: "-30%", y: "-30%", width: "160%", height: "160%" });
+  const blur = el("feGaussianBlur", { in: "SourceGraphic", stdDeviation: "3", result: "blur" });
+  const merge = el("feMerge");
+  const m1 = el("feMergeNode", { in: "blur" });
+  const m2 = el("feMergeNode", { in: "SourceGraphic" });
+  merge.appendChild(m1); merge.appendChild(m2);
+  filter.appendChild(blur); filter.appendChild(merge);
+  defs.appendChild(filter);
+  svg.appendChild(defs);
+
+  // edges layer
+  const edgeGroup = el("g", { class: "edges" });
+  edges.forEach(({ parent, child }) => {
+    const x1 = parent.ax, y1 = parent.ay + NODE_H;
+    const x2 = child.ax,  y2 = child.ay;
+    const cy = (y1 + y2) / 2;
+    const path = el("path", {
+      d: `M ${x1} ${y1} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2}`,
+      fill: "none",
+      stroke: color(parent.type),
+      "stroke-width": "1.5",
+      "stroke-opacity": "0.35",
+    });
+    edgeGroup.appendChild(path);
+  });
+  svg.appendChild(edgeGroup);
+
+  // nodes layer
+  const nodeGroup = el("g", { class: "nodes" });
+  nodes.forEach(node => {
+    const c = color(node.type);
+    const x = node.ax - NODE_W / 2;
+    const y = node.ay;
+    const g = el("g", {
+      transform: `translate(${x},${y})`,
+      style: "cursor:pointer",
+      class: "ast-node",
+    });
+
+    // shadow rect
+    const shadow = el("rect", {
+      x: 3, y: 3, width: NODE_W, height: NODE_H,
+      rx: RADIUS, ry: RADIUS,
+      fill: c, opacity: "0.12",
+    });
+
+    // main rect
+    const rect = el("rect", {
+      x: 0, y: 0, width: NODE_W, height: NODE_H,
+      rx: RADIUS, ry: RADIUS,
+      fill: "#0a0a0f",
+      stroke: c,
+      "stroke-width": "1.5",
+    });
+
+    // left accent bar
+    const bar = el("rect", {
+      x: 0, y: 0, width: 4, height: NODE_H,
+      rx: RADIUS, ry: RADIUS,
+      fill: c,
+    });
+    const bar2 = el("rect", { x: 4, y: 0, width: 4, height: NODE_H, fill: c });
+
+    // label text
+    const txt = el("text", {
+      x: NODE_W / 2 + 2, y: NODE_H / 2,
+      "text-anchor": "middle",
+      "dominant-baseline": "central",
+      fill: c,
+      "font-family": "Space Mono, monospace",
+      "font-size": "10.5",
+      "font-weight": "700",
+    });
+    txt.textContent = truncate(node.label, 12);
+
+    g.appendChild(shadow);
+    g.appendChild(rect);
+    g.appendChild(bar);
+    g.appendChild(bar2);
+    g.appendChild(txt);
+
+    // hover
+    g.addEventListener("mouseenter", e => showTooltip(e, node, c));
+    g.addEventListener("mousemove",  e => moveTooltip(e));
+    g.addEventListener("mouseleave", hideTooltip);
+
+    nodeGroup.appendChild(g);
+  });
+  svg.appendChild(nodeGroup);
+
+  // build legend
+  buildLegend();
+}
+
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// ── tooltip ───────────────────────────────────────────────────────────────
+const tip = document.getElementById("tooltip");
+function showTooltip(e, node, c) {
+  tip.innerHTML = `<strong style="color:${c}">${node.type}</strong>label: <b>${node.label}</b>${node.name ? `<br>name: ${node.name}` : ""}${node.value !== undefined ? `<br>value: ${node.value}` : ""}${node.operator ? `<br>operator: ${node.operator}` : ""}`;
+  tip.classList.add("show");
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  tip.style.left = (e.clientX + 14) + "px";
+  tip.style.top  = (e.clientY - 10) + "px";
+}
+function hideTooltip() { tip.classList.remove("show"); }
+
+// ── legend ────────────────────────────────────────────────────────────────
+const LEGEND = [
+  ["Program",    "Program root"],
+  ["Assignment", "Assignment"],
+  ["Sequence",   "Sequence"],
+  ["Chord",      "Chord"],
+  ["Play",       "Play stmt"],
+  ["Repeat",     "Repeat"],
+  ["If",         "If/Else"],
+  ["BinaryOp",   "Binary op"],
+  ["Note",       "Note literal"],
+  ["Rest",       "Rest"],
+  ["Integer",    "Integer"],
+  ["Identifier", "Identifier"],
+];
+function buildLegend() {
+  const leg = document.getElementById("legend");
+  LEGEND.forEach(([type, label]) => {
+    const item = document.createElement("div");
+    item.className = "leg-item";
+    item.innerHTML = `<span class="leg-dot" style="background:${color(type)}"></span>${label}`;
+    leg.appendChild(item);
+  });
+}
+
+// ── boot ──────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>

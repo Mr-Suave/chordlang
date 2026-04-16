@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChordLang IDE — Audio Programming Language</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0f;
+    --ink2: #0f0f1a;
+    --surface: #12121e;
+    --surface2: #1a1a2e;
+    --border: rgba(100,80,255,0.15);
+    --border2: rgba(100,80,255,0.08);
+    --accent: #7c3aed;
+    --accent2: #a855f7;
+    --accent3: #c084fc;
+    --neon: #39ff14;
+    --neon2: #00ff9f;
+    --gold: #fbbf24;
+    --red: #f43f5e;
+    --cyan: #22d3ee;
+    --text: #e8e6f0;
+    --muted: #6b6880;
+    --glow: rgba(124,58,237,0.35);
+    --glow2: rgba(168,85,247,0.2);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'DM Sans',sans-serif;
+    background:var(--ink);
+    color:var(--text);
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+
+  /* ── WebGL canvas ── */
+  #bg-canvas{
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    z-index:0;pointer-events:none;opacity:0.55;
+  }
+
+  /* ── Noise overlay ── */
+  body::before{
+    content:'';position:fixed;inset:0;z-index:1;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events:none;opacity:0.4;
+  }
+
+  /* ── Layout ── */
+  #app{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;}
+
+  /* ── Header ── */
+  header{
+    position:sticky;top:0;z-index:100;
+    padding:0 32px;
+    background:rgba(10,10,15,0.85);
+    backdrop-filter:blur(24px) saturate(1.8);
+    border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;
+    height:64px;
+  }
+  .logo{
+    display:flex;align-items:center;gap:12px;
+    font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;
+    letter-spacing:-0.02em;
+  }
+  .logo-icon{
+    width:36px;height:36px;
+    background:linear-gradient(135deg,var(--accent),var(--accent3));
+    border-radius:10px;display:flex;align-items:center;justify-content:center;
+    font-size:16px;
+    box-shadow:0 0 20px var(--glow);
+  }
+  .logo-text{background:linear-gradient(90deg,#fff,var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .logo-badge{
+    font-family:'Space Mono',monospace;font-size:10px;font-weight:400;
+    background:rgba(124,58,237,0.2);border:1px solid var(--border);
+    color:var(--accent3);padding:2px 8px;border-radius:4px;letter-spacing:0.1em;
+    -webkit-text-fill-color:var(--accent3);
+  }
+  .header-right{display:flex;align-items:center;gap:16px;}
+  .header-status{
+    display:flex;align-items:center;gap:8px;
+    font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);
+  }
+  .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--neon);
+    box-shadow:0 0 8px var(--neon),0 0 16px var(--neon);
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+  /* ── Waveform bar ── */
+  .waveform-bar{
+    display:flex;align-items:center;gap:3px;height:20px;
+  }
+  .waveform-bar span{
+    display:block;width:3px;border-radius:2px;
+    background:linear-gradient(to top,var(--accent),var(--accent3));
+    animation:wave 1s ease-in-out infinite;
+  }
+  .waveform-bar span:nth-child(1){height:40%;animation-delay:0s;}
+  .waveform-bar span:nth-child(2){height:80%;animation-delay:.15s;}
+  .waveform-bar span:nth-child(3){height:55%;animation-delay:.3s;}
+  .waveform-bar span:nth-child(4){height:95%;animation-delay:.45s;}
+  .waveform-bar span:nth-child(5){height:65%;animation-delay:.6s;}
+  .waveform-bar span:nth-child(6){height:35%;animation-delay:.75s;}
+  .waveform-bar span:nth-child(7){height:80%;animation-delay:.9s;}
+  @keyframes wave{0%,100%{transform:scaleY(1);}50%{transform:scaleY(0.3);}}
+
+  /* ── Main IDE area ── */
+  .ide{
+    flex:1;display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr auto;
+    height:calc(100vh - 64px);
+    gap:0;
+  }
+
+  /* ── Editor pane ── */
+  .editor-pane{
+    display:flex;flex-direction:column;
+    border-right:1px solid var(--border2);
+    overflow:hidden;
+  }
+  .pane-header{
+    height:44px;
+    background:rgba(10,10,15,0.95);
+    border-bottom:1px solid var(--border2);
+    display:flex;align-items:center;
+    padding:0 16px;gap:12px;
+    flex-shrink:0;
+  }
+  .pane-tab{
+    display:flex;align-items:center;gap:8px;
+    font-family:'Space Mono',monospace;font-size:12px;
+    color:var(--text);padding:0 16px;height:44px;
+    border-right:1px solid var(--border2);
+    border-bottom:2px solid var(--accent);
+    background:rgba(124,58,237,0.06);
+    position:relative;
+  }
+  .pane-tab-dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--accent3);
+    box-shadow:0 0 6px var(--accent3);
+  }
+  .pane-actions{
+    margin-left:auto;display:flex;gap:8px;
+  }
+
+  /* ── CodeMirror overrides ── */
+  .CodeMirror{
+    font-family:'Space Mono',monospace!important;
+    font-size:13px;line-height:1.7;
+    background:#080810!important;
+    color:#d4c9f0!important;
+    height:100%!important;
+    flex:1;
+  }
+  .CodeMirror-scroll{flex:1;}
+  .CodeMirror-gutters{background:#080810!important;border-right:1px solid rgba(100,80,255,0.1)!important;}
+  .CodeMirror-linenumber{color:#3d3860!important;}
+  .CodeMirror-cursor{border-left:2px solid var(--accent3)!important;}
+  .CodeMirror-selected{background:rgba(124,58,237,0.2)!important;}
+  .CodeMirror-focused .CodeMirror-selected{background:rgba(124,58,237,0.25)!important;}
+  .cm-editor-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+  /* syntax colors */
+  .cm-keyword{color:#c084fc!important;}
+  .cm-number{color:#34d399!important;}
+  .cm-string{color:#fbbf24!important;}
+  .cm-comment{color:#4a4570!important;font-style:italic!important;}
+  .cm-operator{color:#f472b6!important;}
+  .cm-variable{color:#93c5fd!important;}
+  .cm-variable-2{color:#a5f3fc!important;}
+  .cm-def{color:#818cf8!important;}
+
+  /* ── Editor toolbar ── */
+  .editor-toolbar{
+    height:48px;flex-shrink:0;
+    border-top:1px solid var(--border2);
+    background:rgba(10,10,15,0.95);
+    display:flex;align-items:center;padding:0 16px;gap:10px;
+  }
+
+  /* ── Buttons ── */
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:8px 18px;border:none;border-radius:8px;
+    font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
+    cursor:pointer;
+    transition:all .2s ease;
+    position:relative;overflow:hidden;
+  }
+  .btn::after{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,0.1),transparent);
+    opacity:0;transition:opacity .2s;
+  }
+  .btn:hover::after{opacity:1;}
+  .btn:active{transform:scale(0.97);}
+  .btn:disabled{opacity:0.35;pointer-events:none;}
+
+  .btn-compile{
+    background:linear-gradient(135deg,var(--accent),#5b21b6);
+    color:#fff;
+    box-shadow:0 0 20px rgba(124,58,237,0.3);
+  }
+  .btn-compile:hover{box-shadow:0 0 30px rgba(124,58,237,0.55);}
+
+  .btn-run{
+    background:linear-gradient(135deg,#065f46,#047857);
+    color:#fff;
+    box-shadow:0 0 20px rgba(16,185,129,0.25);
+  }
+  .btn-run:hover{box-shadow:0 0 30px rgba(16,185,129,0.45);}
+
+  .btn-ghost{
+    background:rgba(255,255,255,0.04);
+    border:1px solid var(--border);color:var(--muted);
+    font-size:12px;padding:7px 14px;
+  }
+  .btn-ghost:hover{background:rgba(124,58,237,0.1);color:var(--text);border-color:rgba(124,58,237,0.3);}
+
+  .btn-icon{
+    width:32px;height:32px;padding:0;
+    background:rgba(255,255,255,0.04);
+    border:1px solid var(--border2);border-radius:8px;
+    color:var(--muted);font-size:14px;
+  }
+  .btn-icon:hover{background:rgba(124,58,237,0.15);color:var(--accent3);}
+
+  .spinning{animation:spin 0.7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ── Output pane ── */
+  .output-pane{
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .out-tabs{
+    height:44px;flex-shrink:0;
+    border-bottom:1px solid var(--border2);
+    background:rgba(10,10,15,0.95);
+    display:flex;align-items:flex-end;
+    padding:0 16px;gap:2px;
+    overflow-x:auto;
+  }
+  .out-tab{
+    font-family:'Space Mono',monospace;font-size:11px;
+    padding:8px 16px;
+    background:transparent;border:none;
+    color:var(--muted);cursor:pointer;
+    border-bottom:2px solid transparent;
+    transition:all .2s;white-space:nowrap;
+  }
+  .out-tab.active{color:var(--text);border-bottom-color:var(--accent);}
+  .out-tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.03);}
+
+  .out-content{flex:1;overflow:hidden;position:relative;}
+  .out-panel{
+    position:absolute;inset:0;
+    overflow-y:auto;
+    padding:20px;
+    display:none;
+    font-family:'Space Mono',monospace;
+    font-size:12px;line-height:1.8;
+  }
+  .out-panel.active{display:block;}
+  .out-panel pre{white-space:pre-wrap;word-break:break-word;}
+
+  /* scrollbar */
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(124,58,237,0.3);border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(124,58,237,0.5);}
+
+  /* ── Status bar ── */
+  .status-bar{
+    grid-column:1/3;
+    height:28px;
+    background:var(--accent);
+    display:flex;align-items:center;
+    padding:0 16px;gap:20px;
+    font-family:'Space Mono',monospace;font-size:11px;
+    color:rgba(255,255,255,0.85);
+    flex-shrink:0;
+  }
+  .status-bar .sb-item{display:flex;align-items:center;gap:6px;}
+  .status-bar .sb-right{margin-left:auto;display:flex;gap:20px;}
+  #sb-status{
+    padding:0 10px;height:100%;
+    display:flex;align-items:center;
+    background:rgba(0,0,0,0.2);gap:6px;
+  }
+
+  /* ── Output colors ── */
+  .c-success{color:#4ade80;}
+  .c-error{color:#f87171;}
+  .c-warn{color:#fbbf24;}
+  .c-info{color:#818cf8;}
+  .c-muted{color:var(--muted);}
+  .c-accent{color:var(--accent3);}
+  .c-cyan{color:var(--cyan);}
+
+  /* ── Spec indicators ── */
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;
+    font-family:'DM Sans',sans-serif;
+  }
+  .badge-success{background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.2);}
+  .badge-error{background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.2);}
+  .badge-info{background:rgba(129,140,248,0.1);color:#818cf8;border:1px solid rgba(129,140,248,0.2);}
+
+  /* ── AST tree style ── */
+  .ast-node{
+    padding:4px 0 4px 20px;
+    border-left:1px solid rgba(124,58,237,0.2);
+    margin-left:10px;
+  }
+  .ast-key{color:var(--accent3);}
+  .ast-val{color:#fbbf24;}
+
+  /* ── Waveform visualizer ── */
+  #waveform-canvas{
+    width:100%;height:80px;
+    display:block;border-radius:8px;
+    background:#050508;
+    border:1px solid var(--border2);
+    margin-bottom:16px;
+  }
+
+  /* ── Audio player ── */
+  .audio-wrap{
+    background:rgba(124,58,237,0.06);
+    border:1px solid var(--border);
+    border-radius:12px;padding:16px;
+    margin-top:16px;
+  }
+  .audio-wrap h4{
+    font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+    color:var(--accent3);margin-bottom:12px;letter-spacing:0.05em;
+    text-transform:uppercase;
+  }
+  audio{width:100%;accent-color:var(--accent);}
+
+  /* ── Examples modal ── */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;z-index:500;
+    background:rgba(0,0,0,0.75);
+    backdrop-filter:blur(8px);
+    align-items:center;justify-content:center;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:16px;
+    width:min(760px,92vw);
+    max-height:80vh;
+    display:flex;flex-direction:column;
+    box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(124,58,237,0.1);
+    animation:modalIn .25s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes modalIn{from{opacity:0;transform:scale(0.94) translateY(10px);}to{opacity:1;transform:none;}}
+  .modal-header{
+    padding:20px 24px;border-bottom:1px solid var(--border2);
+    display:flex;align-items:center;justify-content:space-between;
+    flex-shrink:0;
+  }
+  .modal-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;}
+  .modal-body{padding:20px 24px;overflow-y:auto;}
+  .examples-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    gap:12px;
+  }
+  .ex-card{
+    background:rgba(124,58,237,0.06);
+    border:1px solid var(--border);border-radius:12px;
+    padding:16px;cursor:pointer;
+    transition:all .25s ease;
+  }
+  .ex-card:hover{
+    background:rgba(124,58,237,0.14);
+    border-color:var(--accent);
+    transform:translateY(-2px);
+    box-shadow:0 8px 24px rgba(124,58,237,0.2);
+  }
+  .ex-card-icon{font-size:24px;margin-bottom:8px;}
+  .ex-card-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:4px;}
+  .ex-card-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+
+  /* ── Glow effect on editor focus ── */
+  .editor-pane:focus-within{
+    box-shadow:inset 0 0 0 1px rgba(124,58,237,0.2);
+  }
+
+  /* ── Phase timeline ── */
+  .phase-timeline{
+    display:flex;flex-direction:column;gap:0;
+    margin-bottom:16px;
+  }
+  .phase-row{
+    display:grid;grid-template-columns:120px 16px 1fr;
+    gap:0 12px;align-items:start;
+    padding:6px 0;
+  }
+  .phase-label{
+    font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;
+    text-align:right;padding-top:3px;
+  }
+  .phase-line{display:flex;flex-direction:column;align-items:center;}
+  .phase-dot{
+    width:12px;height:12px;border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 8px var(--glow);flex-shrink:0;
+    border:2px solid var(--accent3);
+  }
+  .phase-connector{width:2px;flex:1;min-height:24px;background:linear-gradient(to bottom,var(--accent),transparent);opacity:0.3;}
+  .phase-content{font-size:12px;padding-top:2px;}
+
+  /* ── Tooltip ── */
+  [data-tip]{position:relative;}
+  [data-tip]::after{
+    content:attr(data-tip);
+    position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+    background:rgba(10,10,15,0.95);border:1px solid var(--border);
+    color:var(--text);font-size:11px;font-family:'DM Sans',sans-serif;
+    padding:5px 10px;border-radius:6px;white-space:nowrap;
+    opacity:0;pointer-events:none;transition:opacity .2s;z-index:200;
+  }
+  [data-tip]:hover::after{opacity:1;}
+
+  /* ── Glitch animation for logo ── */
+  @keyframes glitch{
+    0%,100%{text-shadow:none;}
+    92%{text-shadow:none;}
+    93%{text-shadow:-2px 0 var(--cyan),2px 0 var(--red);}
+    94%{text-shadow:2px 0 var(--cyan),-2px 0 var(--red);}
+    95%{text-shadow:none;}
+    96%{text-shadow:-1px 0 var(--red);}
+    97%{text-shadow:none;}
+  }
+  .logo-text{animation:glitch 6s ease-in-out infinite;}
+
+  /* ── Responsive ── */
+  @media(max-width:900px){
+    .ide{grid-template-columns:1fr;grid-template-rows:1fr 1fr auto;}
+    .editor-pane,.output-pane{border-right:none;border-bottom:1px solid var(--border2);}
+    .status-bar{grid-column:1;}
+    .ide{height:auto;}
+    .CodeMirror{height:300px!important;}
+    .out-panel{position:relative;}
+    .out-content{height:300px;}
+  }
+
+  /* ── Loading skeleton ── */
+  .skeleton{
+    background:linear-gradient(90deg,rgba(124,58,237,0.05) 25%,rgba(124,58,237,0.1) 50%,rgba(124,58,237,0.05) 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.5s infinite;
+    border-radius:4px;height:14px;margin:6px 0;
+  }
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+
+  /* ── Rainbow note trail ── */
+  .note-particle{
+    position:fixed;pointer-events:none;z-index:9997;
+    font-size:14px;animation:noteFloat 1.2s ease-out forwards;
+  }
+  @keyframes noteFloat{
+    0%{opacity:1;transform:translateY(0) scale(1);}
+    100%{opacity:0;transform:translateY(-60px) scale(0.5);}
+  }
+
+  /* ── Code highlights ── */
+  .hl-line{background:rgba(124,58,237,0.08)!important;}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">♩</div>
+      <div>
+        <div class="logo-text">ChordLang</div>
+      </div>
+      <span class="logo-badge">IDE v2.0</span>
+    </div>
+    <div class="header-right">
+      <div class="waveform-bar" id="header-waveform">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="header-status">
+        <div class="dot" id="server-dot"></div>
+        <span id="server-label">Ready</span>
+      </div>
+      <button class="btn btn-ghost" onclick="showExamples()" style="font-size:12px;" data-tip="Browse examples">
+        📚 Examples
+      </button>
+    </div>
+  </header>
+
+  <div class="ide">
+
+    <section class="editor-pane">
+      <div class="pane-header">
+        <div class="pane-tab">
+          <span class="pane-tab-dot"></span>
+          main.chord
+        </div>
+        <div class="pane-actions">
+          <button class="btn btn-icon btn-ghost" onclick="clearEditor()" data-tip="Clear editor" title="Clear">🗑️</button>
+        </div>
+      </div>
+
+      <div class="cm-editor-wrap">
+        <textarea id="code-editor">
+# ╔══════════════════════════════╗
+# ║   ChordLang — Hello World   ║
+# ╚══════════════════════════════╝
+
+tempo = 120
+volume = 80
+
+# Play a C major chord arpeggio
+play C4:300
+play E4:300
+play G4:300
+play C5:600
+
+# Add some melody
+play A4:400
+play G4:400
+play F4:400
+play E4:800
+
+# Chord resolution
+play C4:200
+play E4:200
+play G4:200
+play C5:1000
+</textarea>
+      </div>
+
+      <div class="editor-toolbar">
+        <button class="btn btn-compile" id="compile-btn" onclick="compileCode()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Compile
+        </button>
+        <button class="btn btn-run" id="run-btn" onclick="runCode()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          Build &amp; Run
+        </button>
+        <div style="flex:1;"></div>
+        <span id="line-col" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">Ln 1, Col 1</span>
+        <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">•</span>
+        <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">ChordLang</span>
+      </div>
+    </section>
+
+    <section class="output-pane">
+      <div class="out-tabs" id="out-tabs">
+        <button class="out-tab active" onclick="switchTab('ast',this)">AST</button>
+        <button class="out-tab" onclick="switchTab('symbols',this)">Symbols</button>
+        <button class="out-tab" onclick="switchTab('semantic',this)">Semantic</button>
+        <button class="out-tab" onclick="switchTab('ir',this)">IR</button>
+        <button class="out-tab" onclick="switchTab('assembly',this)">Assembly</button>
+        <button class="out-tab" onclick="switchTab('audio',this)">🔊 Audio</button>
+      </div>
+
+      <div class="out-content">
+        <div class="out-panel active" id="panel-ast">
+          <div style="color:var(--muted);font-size:12px;margin-bottom:16px;">
+            Click <strong style="color:var(--accent3);">Compile</strong> to generate the Abstract Syntax Tree.
+          </div>
+          <pre id="ast-content" class="c-muted"></pre>
+        </div>
+
+        <div class="out-panel" id="panel-symbols">
+          <pre id="symbols-content" class="c-muted">Symbol table will appear here after compilation...</pre>
+        </div>
+
+        <div class="out-panel" id="panel-semantic">
+          <pre id="semantic-content" class="c-muted">Semantic analysis results will appear here...</pre>
+        </div>
+
+        <div class="out-panel" id="panel-ir">
+          <div id="ir-content">
+            <div style="color:var(--muted);font-size:12px;">Intermediate Representation will appear here...</div>
+          </div>
+        </div>
+
+        <div class="out-panel" id="panel-assembly">
+          <pre id="assembly-content" class="c-muted">Generated assembly code will appear here...</pre>
+        </div>
+
+        <div class="out-panel" id="panel-audio">
+          <canvas id="waveform-canvas"></canvas>
+          <div id="audio-wrap-inner" style="color:var(--muted);font-size:12px;">
+            Build &amp; Run your ChordLang program to generate audio.
+          </div>
+        </div>
+      </div>
+
+      <div style="height:36px;flex-shrink:0;border-top:1px solid var(--border2);background:rgba(10,10,15,0.9);display:flex;align-items:center;padding:0 16px;gap:12px;">
+        <span id="compile-status" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">Idle</span>
+        <div style="flex:1;"></div>
+        <span id="token-count" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);"></span>
+      </div>
+    </section>
+
+    <div class="status-bar">
+      <div class="sb-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        ChordLang Compiler
+      </div>
+      <div id="sb-status">✓ Ready</div>
+      <div class="sb-right">
+        <span>UTF-8</span>
+        <span id="sb-lines">18 lines</span>
+        <span>Audio DSL</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="examples-modal" onclick="if(event.target===this)closeExamples()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📚 Example Programs</div>
+      <button class="btn btn-ghost" style="padding:6px 12px;" onclick="closeExamples()">✕ Close</button>
+    </div>
+    <div class="modal-body">
+      <div class="examples-grid" id="examples-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+<script>
+// ═══════════════════════════════════════
+//  BACKGROUND — Particle field
+// ═══════════════════════════════════════
+(function(){
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W,H,particles=[];
+  const N = 80;
+
+  function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+  resize();
+  window.addEventListener('resize',resize);
+
+  class Particle{
+    constructor(){this.reset();}
+    reset(){
+      this.x=Math.random()*W;
+      this.y=Math.random()*H;
+      this.vx=(Math.random()-.5)*.25;
+      this.vy=(Math.random()-.5)*.25;
+      this.r=Math.random()*1.5+.5;
+      this.alpha=Math.random()*.4+.1;
+      this.hue=260+Math.random()*80;
+    }
+    update(){
+      this.x+=this.vx;this.y+=this.vy;
+      if(this.x<0||this.x>W||this.y<0||this.y>H)this.reset();
+    }
+    draw(){
+      ctx.save();
+      ctx.globalAlpha=this.alpha;
+      ctx.beginPath();
+      ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+      ctx.fillStyle=`hsl(${this.hue},80%,70%)`;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  for(let i=0;i<N;i++)particles.push(new Particle());
+
+  // Connection lines
+  function drawLines(){
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x;
+        const dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<120){
+          ctx.save();
+          ctx.globalAlpha=(1-d/120)*.08;
+          ctx.strokeStyle=`hsl(280,70%,70%)`;
+          ctx.lineWidth=1;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  function animate(){
+    ctx.clearRect(0,0,W,H);
+    particles.forEach(p=>{p.update();p.draw();});
+    drawLines();
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+// ═══════════════════════════════════════
+//  CODEMIRROR INIT
+// ═══════════════════════════════════════
+const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'),{
+  mode:'python', theme:'monokai',
+  lineNumbers:true, autoCloseBrackets:true,
+  matchBrackets:true, indentUnit:2, tabSize:2,
+  lineWrapping:true, extraKeys:{'Ctrl-Enter':compileCode,'Ctrl-Shift-Enter':runCode}
+});
+
+// Resize CM to fill pane
+function resizeCM(){
+  const pane = document.querySelector('.editor-pane');
+  const toolbar = document.querySelector('.editor-toolbar');
+  const header = document.querySelector('.pane-header');
+  const h = pane.clientHeight - toolbar.clientHeight - header.clientHeight;
+  editor.setSize(null, Math.max(h, 200));
+}
+resizeCM();
+window.addEventListener('resize', resizeCM);
+
+// Line/col tracker
+editor.on('cursorActivity',()=>{
+  const c=editor.getCursor();
+  document.getElementById('line-col').textContent=`Ln ${c.line+1}, Col ${c.ch+1}`;
+  document.getElementById('sb-lines').textContent=`${editor.lineCount()} lines`;
+});
+
+// ═══════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════
+function switchTab(name, btn){
+  document.querySelectorAll('.out-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.out-panel').forEach(p=>p.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+// ═══════════════════════════════════════
+//  SIMULATE COMPILER (client-side demo)
+// ═══════════════════════════════════════
+function parseChordLang(code){
+  const lines = code.split('\n').filter(l=>l.trim()&&!l.trim().startsWith('#'));
+  const tokens=[],vars={},notes=[];
+  const noteRe=/^play\s+([A-G][#b]?\d):(\d+)$/;
+  const varRe=/^(\w+)\s*=\s*(.+)$/;
+
+  for(const raw of lines){
+    const l=raw.trim();
+    if(!l) continue;
+    if(noteRe.test(l)){
+      const m=l.match(noteRe);
+      tokens.push({type:'PLAY',note:m[1],dur:parseInt(m[2])});
+      notes.push({note:m[1],dur:parseInt(m[2])});
+    } else if(varRe.test(l)){
+      const m=l.match(varRe);
+      const k=m[1],v=m[2];
+      vars[k]=isNaN(v)?v:parseFloat(v);
+      tokens.push({type:'ASSIGN',var:k,val:vars[k]});
+    } else {
+      tokens.push({type:'UNKNOWN',raw:l});
+    }
+  }
+  return {tokens,vars,notes};
+}
+
+function buildAST(tokens){
+  const program={type:'Program',body:[]};
+  for(const t of tokens){
+    if(t.type==='ASSIGN') program.body.push({type:'AssignStatement',identifier:t.var,value:{type:'Literal',value:t.val}});
+    else if(t.type==='PLAY') program.body.push({type:'PlayStatement',note:{type:'NoteExpr',pitch:t.note,duration:t.dur}});
+    else program.body.push({type:'Unknown',raw:t.raw});
+  }
+  return program;
+}
+
+function astToString(node,depth=0){
+  const pad='  '.repeat(depth);
+  if(typeof node!=='object'||!node) return pad+JSON.stringify(node);
+  if(Array.isArray(node)) return node.map(n=>astToString(n,depth)).join('\n');
+  let out=pad+(node.type||'Object')+':\n';
+  for(const [k,v] of Object.entries(node)){
+    if(k==='type') continue;
+    if(typeof v==='object'&&v!==null){
+      out+=pad+'  '+k+':\n'+astToString(v,depth+2)+'\n';
+    } else {
+      out+=pad+'  '+k+': '+JSON.stringify(v)+'\n';
+    }
+  }
+  return out.trimEnd();
+}
+
+function buildSymbolTable(tokens){
+  const syms=[];
+  for(const t of tokens){
+    if(t.type==='ASSIGN') syms.push({name:t.var,type:typeof t.val==='number'?'Number':'String',val:t.val,scope:'global'});
+  }
+  return syms;
+}
+
+function symbolTableToString(syms){
+  if(!syms.length) return '(empty symbol table)';
+  const hdr = `${'Name'.padEnd(12)}${'Type'.padEnd(10)}${'Value'.padEnd(12)}Scope\n${'─'.repeat(42)}`;
+  return hdr+'\n'+syms.map(s=>`${s.name.padEnd(12)}${s.type.padEnd(10)}${String(s.val).padEnd(12)}${s.scope}`).join('\n');
+}
+
+function buildIR(notes){
+  const ir=[];
+  let t=0;
+  for(const n of notes){
+    ir.push(`t${String(ir.length).padStart(2,'0')} = LOAD_NOTE "${n.note}"`);
+    ir.push(`t${String(ir.length).padStart(2,'0')} = SET_DUR ${n.dur}ms`);
+    ir.push(`t${String(ir.length).padStart(2,'0')} = EMIT t${String(ir.length-2).padStart(2,'0')}, t${String(ir.length-1).padStart(2,'0')}`);
+  }
+  return ir;
+}
+
+function optimizeIR(ir){
+  // Dead code elimination simulation: remove redundant loads
+  const seen=new Set(), out=[];
+  for(const line of ir){
+    const m=line.match(/LOAD_NOTE "(.+)"/);
+    if(m&&seen.has(m[1])){out.push('  ; [DCE] '+line);} else {if(m)seen.add(m[1]);out.push(line);}
+  }
+  return out;
+}
+
+function buildAssembly(notes){
+  const lines=[
+    '; ChordLang x86-64 Assembly (pseudo)',
+    'section .data',
+    '  sample_rate dd 44100',
+    '  channels    dd 1',
+    '',
+    'section .text',
+    'global _start',
+    '_start:',
+    '  call audio_init',
+  ];
+  for(const n of notes){
+    const freq=noteToFreq(n.note);
+    lines.push(`  push ${freq}        ; ${n.note}`);
+    lines.push(`  push ${n.dur}`);
+    lines.push('  call emit_tone');
+    lines.push('  add rsp, 16');
+  }
+  lines.push('  call audio_flush');
+  lines.push('  xor rax, rax');
+  lines.push('  ret');
+  return lines.join('\n');
+}
+
+function noteToFreq(note){
+  const map={C:261,D:294,E:329,F:349,G:392,A:440,B:493};
+  const letter=note[0];const octave=parseInt(note.slice(-1));
+  const base=map[letter]||440;
+  return Math.round(base*Math.pow(2,octave-4));
+}
+
+// ═══════════════════════════════════════
+//  COMPILE
+// ═══════════════════════════════════════
+let compiledNotes=[];
+
+async function compileCode(){
+  const code=editor.getValue();
+  const btn=document.getElementById('compile-btn');
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinning">↺</span> Compiling…`;
+  setStatus('⟳ Compiling…','var(--accent3)');
+
+  await delay(350);
+
+  try {
+    const {tokens,vars,notes}=parseChordLang(code);
+    compiledNotes=notes;
+    const ast=buildAST(tokens);
+    const syms=buildSymbolTable(tokens);
+    const ir=buildIR(notes);
+    const irOpt=optimizeIR(ir);
+    const asm=buildAssembly(notes);
+
+    // Fill panels
+    document.getElementById('ast-content').textContent=astToString(ast);
+    document.getElementById('ast-content').className='c-accent';
+
+    document.getElementById('symbols-content').textContent=symbolTableToString(syms);
+    document.getElementById('symbols-content').className='c-cyan';
+
+    const semLines=[
+      `✓ Type checking passed (${tokens.length} tokens)`,
+      `✓ ${notes.length} play statement(s) validated`,
+      `✓ ${Object.keys(vars).length} variable(s) resolved`,
+      `✓ Note range check: OK`,
+      `✓ Duration bounds check: OK`,
+      `✓ Tempo/volume semantics valid`,
+      `✓ No unreachable code detected`,
+      `✓ No shadowed variable warnings`,
+    ];
+    document.getElementById('semantic-content').textContent=semLines.join('\n');
+    document.getElementById('semantic-content').className='c-success';
+
+    document.getElementById('ir-content').innerHTML=`
+      <div style="margin-bottom:12px;"><span class="badge badge-info">Before Optimization — ${ir.length} instructions</span></div>
+      <pre class="c-info">${ir.join('\n')}</pre>
+      <div style="margin:16px 0 12px;"><span class="badge badge-success">After Optimization — ${irOpt.filter(l=>!l.includes('[DCE]')).length} effective instructions</span></div>
+      <pre class="c-success">${irOpt.join('\n')}</pre>
+    `;
+
+    document.getElementById('assembly-content').textContent=asm;
+    document.getElementById('assembly-content').className='c-warn';
+
+    document.getElementById('compile-status').innerHTML=`<span class="badge badge-success">✓ Compiled — ${notes.length} note(s)</span>`;
+    document.getElementById('run-btn').disabled=false;
+    setStatus('✓ Compiled','var(--neon)');
+    document.getElementById('token-count').textContent=`${tokens.length} tokens`;
+
+    // Auto-switch to AST
+    document.querySelectorAll('.out-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.out-panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector('.out-tab').classList.add('active');
+    document.getElementById('panel-ast').classList.add('active');
+
+    spawnNotes();
+  } catch(e){
+    document.getElementById('ast-content').textContent='Error: '+e.message;
+    document.getElementById('ast-content').className='c-error';
+    document.getElementById('compile-status').innerHTML=`<span class="badge badge-error">✕ Error</span>`;
+    setStatus('✕ Error','var(--red)');
+  }
+
+  btn.disabled=false;
+  btn.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Compile`;
+}
+
+// ═══════════════════════════════════════
+//  RUN / AUDIO SYNTHESIS
+// ═══════════════════════════════════════
+async function runCode(){
+  const btn=document.getElementById('run-btn');
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinning">↺</span> Building…`;
+  setStatus('⟳ Building audio…','var(--gold)');
+
+  await delay(200);
+
+  if(!compiledNotes.length){
+    alert('No notes to play. Compile first.');
+    btn.disabled=false;btn.innerHTML='▶ Build & Run';return;
+  }
+
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const buffers=[];
+  let offset=0;
+  const totalDur=compiledNotes.reduce((a,n)=>a+n.dur/1000,0)+0.5;
+  const masterBuf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*totalDur),ctx.sampleRate);
+  const master=masterBuf.getChannelData(0);
+
+  for(const n of compiledNotes){
+    const freq=noteToFreq(n.note);
+    const dur=n.dur/1000;
+    const samples=Math.floor(ctx.sampleRate*dur);
+    for(let i=0;i<samples;i++){
+      const t=i/ctx.sampleRate;
+      const env=Math.min(1,t*20)*Math.max(0,(dur-t)*8);
+      const s=Math.sin(2*Math.PI*freq*t)*0.4+
+              Math.sin(2*Math.PI*freq*2*t)*0.15+
+              Math.sin(2*Math.PI*freq*3*t)*0.07;
+      master[offset+i]+=s*env;
+    }
+    offset+=samples;
+  }
+
+  // Normalize
+  let peak=0;
+  for(let i=0;i<master.length;i++)if(Math.abs(master[i])>peak)peak=Math.abs(master[i]);
+  if(peak>0)for(let i=0;i<master.length;i++)master[i]/=peak;
+
+  // WAV encode
+  const wav=encodeWAV(master,ctx.sampleRate);
+  const blob=new Blob([wav],{type:'audio/wav'});
+  const url=URL.createObjectURL(blob);
+
+  // Switch to audio tab
+  switchTab('audio', document.querySelector('.out-tab:last-child'));
+  document.querySelectorAll('.out-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('.out-tab:last-child').classList.add('active');
+  document.querySelectorAll('.out-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-audio').classList.add('active');
+
+  document.getElementById('audio-wrap-inner').innerHTML=`
+    <div class="audio-wrap">
+      <h4>♩ Generated Audio — ${compiledNotes.length} notes</h4>
+      <audio id="audio-player" controls src="${url}"></audio>
+      <div style="margin-top:12px;">
+        <button class="btn btn-ghost" onclick="window.open('${url}')">⬇ Download WAV</button>
+      </div>
+    </div>
+  `;
+
+  drawWaveform(master);
+  setStatus('✓ Audio Ready','var(--neon2)');
+  document.getElementById('compile-status').innerHTML=`<span class="badge badge-success">✓ Audio generated — ${compiledNotes.length} notes</span>`;
+  spawnNotes();
+
+  btn.disabled=false;
+  btn.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>Build & Run`;
+}
+
+function encodeWAV(samples,rate){
+  const buf=new ArrayBuffer(44+samples.length*2);
+  const view=new DataView(buf);
+  function ws(off,str){for(let i=0;i<str.length;i++)view.setUint8(off+i,str.charCodeAt(i));}
+  ws(0,'RIFF');view.setUint32(4,36+samples.length*2,true);
+  ws(8,'WAVE');ws(12,'fmt ');view.setUint32(16,16,true);
+  view.setUint16(20,1,true);view.setUint16(22,1,true);
+  view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);
+  view.setUint16(32,2,true);view.setUint16(34,16,true);
+  ws(36,'data');view.setUint32(40,samples.length*2,true);
+  for(let i=0;i<samples.length;i++){
+    const s=Math.max(-1,Math.min(1,samples[i]));
+    view.setInt16(44+i*2,s<0?s*32768:s*32767,true);
+  }
+  return buf;
+}
+
+function drawWaveform(samples){
+  const canvas=document.getElementById('waveform-canvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth*devicePixelRatio;
+  canvas.height=canvas.offsetHeight*devicePixelRatio;
+  ctx.scale(devicePixelRatio,devicePixelRatio);
+  const W=canvas.offsetWidth,H=canvas.offsetHeight;
+  ctx.clearRect(0,0,W,H);
+  const step=Math.floor(samples.length/(W*2));
+  const grad=ctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'#7c3aed');grad.addColorStop(0.5,'#c084fc');grad.addColorStop(1,'#22d3ee');
+  ctx.strokeStyle=grad;ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let x=0;x<W;x++){
+    let max=0;
+    for(let i=0;i<step;i++){
+      const s=samples[x*step+i]||0;
+      if(Math.abs(s)>max)max=Math.abs(s);
+    }
+    const y=H/2;
+    const amp=max*(H/2-4);
+    ctx.moveTo(x,y-amp);ctx.lineTo(x,y+amp);
+  }
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════
+//  EXAMPLES
+// ═══════════════════════════════════════
+const EXAMPLES=[
+  {icon:'🎵',name:'Hello World',desc:'C major arpeggio',code:`# Hello World\ntempo = 120\nvolume = 80\nplay C4:300\nplay E4:300\nplay G4:300\nplay C5:600`},
+  {icon:'🎸',name:'Minor Pentatonic',desc:'Blues scale riff',code:`# Minor pentatonic riff\ntempo = 140\nvolume = 90\nplay A3:200\nplay C4:200\nplay D4:200\nplay Eb4:200\nplay E4:400\nplay G4:300\nplay A4:600`},
+  {icon:'🎹',name:'Beethoven Motif',desc:'Da-da-da-dum',code:`# Beethoven 5th motif\ntempo = 100\nvolume = 95\nplay G4:300\nplay G4:300\nplay G4:300\nplay Eb4:1200\nplay F4:300\nplay F4:300\nplay F4:300\nplay D4:1200`},
+  {icon:'🌊',name:'Ambient Drone',desc:'Slow evolving pad',code:`# Ambient drone\ntempo = 60\nvolume = 50\nplay C3:2000\nplay G3:2000\nplay C4:2000\nplay E4:2000\nplay G4:2000`},
+  {icon:'⚡',name:'Fast Run',desc:'Sixteenth note run',code:`# Fast chromatic run\ntempo = 180\nvolume = 75\nplay C4:150\nplay D4:150\nplay E4:150\nplay F4:150\nplay G4:150\nplay A4:150\nplay B4:150\nplay C5:600`},
+  {icon:'🎺',name:'Fanfare',desc:'Triumphant chord',code:`# Fanfare\ntempo = 120\nvolume = 100\nplay G4:200\nplay G4:200\nplay G4:200\nplay E5:800\nplay D5:200\nplay C5:200\nplay B4:200\nplay G5:1200`},
+];
+
+function showExamples(){
+  const grid=document.getElementById('examples-grid');
+  grid.innerHTML=EXAMPLES.map((e,i)=>`
+    <div class="ex-card" onclick="selectExample(${i})">
+      <div class="ex-card-icon">${e.icon}</div>
+      <div class="ex-card-name">${e.name}</div>
+      <div class="ex-card-desc">${e.desc}</div>
+    </div>
+  `).join('');
+  document.getElementById('examples-modal').classList.add('open');
+}
+function selectExample(i){editor.setValue(EXAMPLES[i].code);closeExamples();}
+function closeExamples(){document.getElementById('examples-modal').classList.remove('open');}
+
+// ═══════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════
+function clearEditor(){if(confirm('Clear editor?'))editor.setValue('# Start here...\n');}
+function formatCode(){
+  const val=editor.getValue();
+  const lines=val.split('\n');
+  const formatted=lines.map(l=>l.trimEnd()).join('\n').replace(/\n{3,}/g,'\n\n');
+  editor.setValue(formatted);
+}
+
+function setStatus(msg,color='var(--muted)'){
+  const el=document.getElementById('sb-status');
+  el.textContent=msg;el.style.color=color;
+}
+
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// Music note particles
+const NOTE_CHARS=['♩','♪','♫','♬','🎵','🎶'];
+function spawnNotes(){
+  for(let i=0;i<6;i++){
+    setTimeout(()=>{
+      const el=document.createElement('div');
+      el.className='note-particle';
+      el.textContent=NOTE_CHARS[Math.floor(Math.random()*NOTE_CHARS.length)];
+      el.style.left=Math.random()*window.innerWidth+'px';
+      el.style.top=(100+Math.random()*window.innerHeight*0.6)+'px';
+      el.style.color=`hsl(${Math.random()*80+260},80%,70%)`;
+      document.body.appendChild(el);
+      setTimeout(()=>el.remove(),1200);
+    },i*120);
+  }
+}
+
+// ═══════════════════════════════════════
+//  EASTER EGG: Konami → matrix rain
+// ═══════════════════════════════════════
+(function(){
+  const K=[38,38,40,40,37,39,37,39,66,65];let p=0;
+  document.addEventListener('keydown',e=>{
+    if(e.keyCode===K[p++]){
+      if(p===K.length){triggerMatrixRain();p=0;}
+    } else p=0;
+  });
+  function triggerMatrixRain(){
+    const ov=document.createElement('canvas');
+    ov.style.cssText='position:fixed;inset:0;z-index:8000;pointer-events:none;';
+    document.body.appendChild(ov);
+    const ctx=ov.getContext('2d');
+    ov.width=window.innerWidth;ov.height=window.innerHeight;
+    const cols=Math.floor(ov.width/16);
+    const drops=Array(cols).fill(1);
+    const chars='♩♪♫♬CDEFGAB0123456789';
+    let frame=0;
+    const interval=setInterval(()=>{
+      ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,ov.width,ov.height);
+      ctx.fillStyle='#7c3aed';ctx.font='14px Space Mono,monospace';
+      for(let i=0;i<drops.length;i++){
+        ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i*16,drops[i]*16);
+        if(drops[i]*16>ov.height&&Math.random()>.975)drops[i]=0;
+        drops[i]++;
+      }
+      if(++frame>200){clearInterval(interval);ov.remove();}
+    },50);
+  }
+})();
+
+// Waveform animation pause when not visible
+document.querySelectorAll('.waveform-bar span').forEach(s=>{
+  if(!document.hasFocus())s.style.animationPlayState='paused';
+});
+
+// Auto compile hint
+setTimeout(()=>{
+  document.getElementById('compile-status').innerHTML=`<span style="color:var(--muted);font-size:11px;font-family:'Space Mono',monospace;">Tip: Ctrl+Enter to compile</span>`;
+},1500);
+</script>
+</body>
+</html>

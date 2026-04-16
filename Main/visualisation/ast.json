@@ -1,0 +1,280 @@
+{
+  "type": "Program",
+  "children": [
+    {
+      "type": "Assignment",
+      "label": "tempo =",
+      "name": "tempo",
+      "lineno": 3,
+      "children": [
+        {
+          "type": "Integer",
+          "label": "140",
+          "value": 140,
+          "children": []
+        }
+      ]
+    },
+    {
+      "type": "Assignment",
+      "label": "volume =",
+      "name": "volume",
+      "lineno": 4,
+      "children": [
+        {
+          "type": "Integer",
+          "label": "85",
+          "value": 85,
+          "children": []
+        }
+      ]
+    },
+    {
+      "type": "Sequence",
+      "label": "sequence intro",
+      "name": "intro",
+      "lineno": 6,
+      "children": [
+        {
+          "type": "Note",
+          "label": "C4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "E4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "G4:2",
+          "children": []
+        },
+        {
+          "type": "Rest",
+          "label": "rest:1",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "A4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "G4",
+          "children": []
+        }
+      ]
+    },
+    {
+      "type": "Sequence",
+      "label": "sequence bridge",
+      "name": "bridge",
+      "lineno": 7,
+      "children": [
+        {
+          "type": "Note",
+          "label": "F4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "A4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "C5:2",
+          "children": []
+        },
+        {
+          "type": "Rest",
+          "label": "rest:1",
+          "children": []
+        }
+      ]
+    },
+    {
+      "type": "Chord",
+      "label": "chord Cmaj",
+      "name": "Cmaj",
+      "lineno": 9,
+      "children": [
+        {
+          "type": "Note",
+          "label": "C4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "E4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "G4",
+          "children": []
+        }
+      ]
+    },
+    {
+      "type": "Chord",
+      "label": "chord Amin",
+      "name": "Amin",
+      "lineno": 10,
+      "children": [
+        {
+          "type": "Note",
+          "label": "A3",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "C4",
+          "children": []
+        },
+        {
+          "type": "Note",
+          "label": "E4",
+          "children": []
+        }
+      ]
+    },
+    {
+      "type": "Repeat",
+      "label": "repeat \u2026 times",
+      "lineno": 12,
+      "children": [
+        {
+          "type": "RepeatCount",
+          "label": "count",
+          "children": [
+            {
+              "type": "Integer",
+              "label": "2",
+              "value": 2,
+              "children": []
+            }
+          ]
+        },
+        {
+          "type": "RepeatBody",
+          "label": "body",
+          "children": [
+            {
+              "type": "Play",
+              "label": "play",
+              "lineno": 13,
+              "children": [
+                {
+                  "type": "Identifier",
+                  "label": "intro",
+                  "name": "intro",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Play",
+              "label": "play",
+              "lineno": 14,
+              "children": [
+                {
+                  "type": "Identifier",
+                  "label": "Cmaj",
+                  "name": "Cmaj",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "If",
+      "label": "if \u2026 then \u2026 else",
+      "lineno": 17,
+      "children": [
+        {
+          "type": "IfCondition",
+          "label": "condition",
+          "children": [
+            {
+              "type": "BinaryOp",
+              "label": ">",
+              "operator": ">",
+              "lineno": 17,
+              "children": [
+                {
+                  "type": "Identifier",
+                  "label": "tempo",
+                  "name": "tempo",
+                  "children": []
+                },
+                {
+                  "type": "Integer",
+                  "label": "120",
+                  "value": 120,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "ThenBranch",
+          "label": "then",
+          "children": [
+            {
+              "type": "Play",
+              "label": "play",
+              "lineno": 18,
+              "children": [
+                {
+                  "type": "Identifier",
+                  "label": "bridge",
+                  "name": "bridge",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Play",
+              "label": "play",
+              "lineno": 19,
+              "children": [
+                {
+                  "type": "Identifier",
+                  "label": "Amin",
+                  "name": "Amin",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "ElseBranch",
+          "label": "else",
+          "children": [
+            {
+              "type": "Play",
+              "label": "play",
+              "lineno": 21,
+              "children": [
+                {
+                  "type": "Identifier",
+                  "label": "intro",
+                  "name": "intro",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
