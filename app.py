@@ -145,7 +145,10 @@ def compile_code():
             
             # Phase 5: Assembly Generation
             try:
-                asm_gen = AsmGenerator()
+                # Generate unique filename based on code hash or just use output.wav for now
+                # but ensure we can handle multiple sessions.
+                wav_filename = "output.wav"
+                asm_gen = AsmGenerator(filename=wav_filename)
                 asm_code = asm_gen.generate(ir_program)
                 
                 result['phases']['assembly'] = {
@@ -154,11 +157,12 @@ def compile_code():
                 }
                 
                 # Save assembly file
-                asm_path = os.path.join(OUTPUT_DIR, 'output.asm')
+                asm_filename = 'output.asm'
+                asm_path = os.path.join(OUTPUT_DIR, asm_filename)
                 with open(asm_path, 'w') as f:
                     f.write(asm_code)
                 
-                result['asm_file'] = 'output.asm'
+                result['asm_file'] = asm_filename
                 
             except Exception as e:
                 result['phases']['assembly'] = {
@@ -185,15 +189,19 @@ def compile_code():
 def assemble_and_link():
     """Assemble the generated assembly code and link to create executable"""
     try:
-        asm_path = os.path.join(OUTPUT_DIR, 'output.asm')
-        obj_path = os.path.join(OUTPUT_DIR, 'output.o')
-        exe_path = os.path.join(OUTPUT_DIR, 'output')
+        data = request.json or {}
+        asm_filename = data.get('asm_file', 'output.asm')
+        
+        asm_path = os.path.join(OUTPUT_DIR, asm_filename)
+        base_name = os.path.splitext(asm_filename)[0]
+        obj_path = os.path.join(OUTPUT_DIR, base_name + '.o')
+        exe_path = os.path.join(OUTPUT_DIR, base_name)
         runtime_obj = os.path.join(os.path.dirname(__file__), 'Main', 'Assembly', 'audio_runtime.o')
         
         if not os.path.exists(asm_path):
             return jsonify({
                 'success': False,
-                'error': 'No assembly file found. Compile first.'
+                'error': f'Assembly file {asm_filename} not found. Compile first.'
             })
         
         # Assemble
@@ -230,18 +238,35 @@ def assemble_and_link():
             cwd=OUTPUT_DIR
         )
         
-        wav_path = os.path.join(OUTPUT_DIR, 'output.wav')
-        if os.path.exists(wav_path):
+        # The AsmGenerator currently uses whatever filename was passed to it.
+        # If we didn't change it, it's output.wav
+        wav_filename = base_name + '.wav'
+        # Check if output.wav exists and rename if necessary, 
+        # or if the asm already points to base_name.wav
+        
+        actual_wav = os.path.join(OUTPUT_DIR, 'output.wav') # Default in AsmGenerator if not changed
+        if not os.path.exists(actual_wav):
+            # Try base_name.wav
+            actual_wav = os.path.join(OUTPUT_DIR, wav_filename)
+
+        if os.path.exists(actual_wav):
+            # Rename to ensure consistency if needed
+            final_wav_name = base_name + '.wav'
+            final_wav_path = os.path.join(OUTPUT_DIR, final_wav_name)
+            if actual_wav != final_wav_path:
+                os.rename(actual_wav, final_wav_path)
+                
             return jsonify({
                 'success': True,
                 'message': 'Audio generated successfully',
-                'wav_file': 'output.wav'
+                'wav_file': final_wav_name
             })
         else:
             return jsonify({
                 'success': False,
                 'error': 'Executable ran but no WAV file generated'
             })
+
             
     except Exception as e:
         return jsonify({
