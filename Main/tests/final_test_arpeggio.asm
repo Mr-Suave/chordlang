@@ -9,24 +9,26 @@ extern write_wav_header
 extern reset_buffer
 
 section .data
-    filename db 'test_valid.wav', 0
+    filename db 'final_test_arpeggio.wav', 0
     msg_done db 'Done generating WAV!', 10
     msg_done_len equ $ - msg_done
     freq_0 dd 261.63
-    freq_1 dd 293.66
-    freq_2 dd 329.63
-    freq_3 dd 392.00
-    freq_4 dd 349.23
-    freq_5 dd 196.00
-    freq_6 dd 246.94
+    freq_1 dd 329.63
+    freq_2 dd 392.00
+    freq_3 dd 523.25
+    freq_4 dd 174.61
+    freq_5 dd 220.00
+    freq_6 dd 349.23
+    freq_7 dd 196.00
+    freq_8 dd 246.94
+    freq_9 dd 293.66
+    freq_10 dd 130.81
 
 section .bss
     wav_header resb 44
     fd resd 1
-    var__t2 resq 1
     var__t1 resq 1
     var__t0 resq 1
-    var_intensity resq 1
 
 section .text
 global _start
@@ -34,34 +36,18 @@ _start:
     ; Initialize runtime
     call init_audio_runtime
     ; Program start
-    ; Set tempo to 120
-    ; Tempo set to 120 (Informational only)
+    ; Set tempo to 140
+    ; Tempo set to 140 (Informational only)
     ; Set volume to 80
     mov eax, 20640
     cvtsi2ss xmm0, eax
     call set_amplitude
-    ; Define sequence 'intro' with 5 items
-    ; Define sequence 'verse' with 6 items
-    ; Define chord 'c_major' with 3 notes
-    ; Define chord 'g_major' with 3 notes
-    ; Play sequence 'intro'
-    movss xmm0, dword [freq_0]
-    mov rdi, 500
-    call generate_note
-    movss xmm0, dword [freq_1]
-    mov rdi, 500
-    call generate_note
-    movss xmm0, dword [freq_2]
-    mov rdi, 500
-    call generate_note
-    mov rdi, 250
-    call generate_rest
-    movss xmm0, dword [freq_3]
-    mov rdi, 1000
-    call generate_note
-    ; Rest for 500ms
-    mov rdi, 500
-    call generate_rest
+    ; Set instrument to guitar
+    mov rdi, 1
+    call set_instrument
+    ; Define chord 'c_major' with 4 notes
+    ; Define chord 'f_major' with 4 notes
+    ; Define chord 'g_major' with 4 notes
     ; Initialize repeat counter to 2
     mov rax, 2
     mov qword [var__t0], rax
@@ -71,38 +57,77 @@ repeat_start0:
     mov rax, qword [var__t0]
     test rax, rax
     jz repeat_end1
-    ; Play sequence 'verse'
+    ; Play chord 'c_major'
+    ; Limitation: Real chords should play all notes at the same time, not sequentially.
+    ; However, this runtime only supports single frequency output per note.
     movss xmm0, dword [freq_0]
-    mov rdi, 250
+    mov rdi, 150
     call generate_note
     movss xmm0, dword [freq_1]
-    mov rdi, 250
+    mov rdi, 150
     call generate_note
     movss xmm0, dword [freq_2]
-    mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_4]
-    mov rdi, 250
+    mov rdi, 150
     call generate_note
     movss xmm0, dword [freq_3]
-    mov rdi, 500
+    mov rdi, 400
     call generate_note
-    mov rdi, 500
+    ; Rest for 100ms
+    mov rdi, 100
+    call generate_rest
+    ; Play chord 'f_major'
+    ; Limitation: Real chords should play all notes at the same time, not sequentially.
+    ; However, this runtime only supports single frequency output per note.
+    movss xmm0, dword [freq_4]
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_5]
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_0]
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_6]
+    mov rdi, 400
+    call generate_note
+    ; Rest for 100ms
+    mov rdi, 100
+    call generate_rest
+    ; Play chord 'g_major'
+    ; Limitation: Real chords should play all notes at the same time, not sequentially.
+    ; However, this runtime only supports single frequency output per note.
+    movss xmm0, dword [freq_7]
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_8]
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_9]
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_2]
+    mov rdi, 400
+    call generate_note
+    ; Rest for 100ms
+    mov rdi, 100
     call generate_rest
     ; Play chord 'c_major'
     ; Limitation: Real chords should play all notes at the same time, not sequentially.
     ; However, this runtime only supports single frequency output per note.
     movss xmm0, dword [freq_0]
-    mov rdi, 1000
+    mov rdi, 150
+    call generate_note
+    movss xmm0, dword [freq_1]
+    mov rdi, 150
     call generate_note
     movss xmm0, dword [freq_2]
-    mov rdi, 1000
+    mov rdi, 150
     call generate_note
     movss xmm0, dword [freq_3]
-    mov rdi, 1000
+    mov rdi, 400
     call generate_note
-    ; Rest for 250ms
-    mov rdi, 250
+    ; Rest for 300ms
+    mov rdi, 300
     call generate_rest
     ; Decrement counter
     mov rax, qword [var__t0]
@@ -115,53 +140,17 @@ repeat_start0:
     jmp repeat_start0
     ; Repeat loop end
 repeat_end1:
-    ; intensity = 75
-    mov rax, 75
-    mov qword [var_intensity], rax
-    ; _t2 = (intensity > 50)
-    mov rax, qword [var_intensity]
-    mov rcx, 50
-    cmp rax, rcx
-    setg al
-    movzx rax, al
-    mov qword [var__t2], rax
-    ; Jump to else if condition is false
-    mov rax, qword [var__t2]
-    test rax, rax
-    jz else2
-    ; Play chord 'g_major'
-    ; Limitation: Real chords should play all notes at the same time, not sequentially.
-    ; However, this runtime only supports single frequency output per note.
-    movss xmm0, dword [freq_5]
-    mov rdi, 1000
+    ; Set instrument to bass
+    mov rdi, 2
+    call set_instrument
+    ; Set volume to 120
+    mov eax, 30960
+    cvtsi2ss xmm0, eax
+    call set_amplitude
+    ; Play note C3
+    movss xmm0, dword [freq_10]
+    mov rdi, 1500
     call generate_note
-    movss xmm0, dword [freq_6]
-    mov rdi, 1000
-    call generate_note
-    movss xmm0, dword [freq_1]
-    mov rdi, 1000
-    call generate_note
-    ; Skip else block
-    jmp endif3
-    ; Else block
-else2:
-    ; Play sequence 'intro'
-    movss xmm0, dword [freq_0]
-    mov rdi, 500
-    call generate_note
-    movss xmm0, dword [freq_1]
-    mov rdi, 500
-    call generate_note
-    movss xmm0, dword [freq_2]
-    mov rdi, 500
-    call generate_note
-    mov rdi, 250
-    call generate_rest
-    movss xmm0, dword [freq_3]
-    mov rdi, 1000
-    call generate_note
-    ; End of if statement
-endif3:
     ; Program end
     ; Get buffer data
     call get_buffer_data
