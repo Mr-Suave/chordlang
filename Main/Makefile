@@ -7,28 +7,21 @@ RUNTIME_DIR = Assembly
 RUNTIME_OBJ = $(RUNTIME_DIR)/audio_runtime.o
 OUTPUTS_DIR = ../outputs
 
-# Find all test files
-TEST_CL = $(wildcard tests/*.cl)
-TEST_ASM = $(TEST_CL:.cl=.asm)
-TEST_EXEC = $(TEST_CL:.cl=)
+.PHONY: all runtime clean run help
 
-.PHONY: all runtime clean compile run help
-
-all: runtime compile
+# Now 'all' will run the full pipeline if a FILE is provided
+all: runtime
+	@if [ -n "$(FILE)" ]; then \
+		$(PYTHON) $(COMPILER) $(FILE) --run; \
+	else \
+		$(PYTHON) $(COMPILER); \
+	fi
 
 # Build the audio runtime library
 runtime:
 	@$(MAKE) -C $(RUNTIME_DIR) library
 
-# Compile .cl files to .asm
-compile: runtime
-	@if [ -n "$(FILE)" ]; then \
-		$(PYTHON) $(COMPILER) $(FILE); \
-	else \
-		$(PYTHON) $(COMPILER); \
-	fi
-
-# Compile and run to generate audio
+# Explicit target for just running
 run: runtime
 	@if [ -n "$(FILE)" ]; then \
 		$(PYTHON) $(COMPILER) $(FILE) --run; \
@@ -38,7 +31,7 @@ run: runtime
 
 # Clean build artifacts
 clean:
-	rm -f tests/*.o tests/*.asm $(TEST_EXEC)
+	rm -f tests/*.o tests/*.asm tests/test1 tests/test2 tests/test tests/test_instrument tests/test_invalid tests/test_ir_loop tests/test_ir_simple tests/test_valid tests/test_warnings
 	$(MAKE) -C $(RUNTIME_DIR) clean
 	@echo "✓ Clean complete"
 
@@ -47,11 +40,11 @@ help:
 	@echo "ChordLang Compiler Makefile"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make all                - Build runtime and compile default tests"
+	@echo "  make FILE=path          - Compile, link, and generate audio for a file"
+	@echo "  make run FILE=path      - Same as above (explicit run)"
+	@echo "  make all                - Compile all default test files (no audio)"
 	@echo "  make runtime            - Build only the assembly runtime library"
-	@echo "  make compile FILE=path  - Compile a specific .cl file to .asm"
-	@echo "  make run FILE=path      - Compile, link, and generate audio for a file"
 	@echo "  make clean              - Remove temporary build files"
 	@echo ""
 	@echo "Example:"
-	@echo "  make run FILE=tests/test_valid.cl"
+	@echo "  make FILE=tests/test_valid.cl"
