@@ -4,8 +4,7 @@
 tempo = 120
 instrument = non_existent_instrument # Error: Unknown instrument
 
-# Error: Assigning a note to a variable (Variables only hold numeric values)
-myVar = C4 
+ 
 
 # Error: Playing an undefined symbol
 play mystery_sequence

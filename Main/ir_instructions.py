@@ -159,29 +159,33 @@ class IRProgram:
         self._merge_labels()
     
     def _constant_folding(self):
-        """Fold constant arithmetic operations."""
+        """Fold constant arithmetic and comparison operations."""
         optimized = []
         
         for instr in self.instructions:
+            # Arithmetic Folding
             if instr.opcode in (IROpcode.ADD, IROpcode.SUB, IROpcode.MOD):
-                # Check if both operands are constants
                 if isinstance(instr.args[1], int) and isinstance(instr.args[2], int):
                     left, right = instr.args[1], instr.args[2]
+                    if instr.opcode == IROpcode.ADD: result = left + right
+                    elif instr.opcode == IROpcode.SUB: result = left - right
+                    else: result = left % right
                     
-                    if instr.opcode == IROpcode.ADD:
-                        result = left + right
-                    elif instr.opcode == IROpcode.SUB:
-                        result = left - right
-                    else:  # MOD
-                        result = left % right
+                    optimized.append(IRInstruction(IROpcode.ASSIGN, [instr.args[0], result], instr.lineno, f"folded: {left} {instr.opcode.name} {right}"))
+                    continue
+
+            # Comparison Folding
+            elif instr.opcode in (IROpcode.CMP_GT, IROpcode.CMP_LT, IROpcode.CMP_GTE, IROpcode.CMP_LTE, IROpcode.CMP_EQ, IROpcode.CMP_NEQ):
+                if isinstance(instr.args[1], int) and isinstance(instr.args[2], int):
+                    left, right = instr.args[1], instr.args[2]
+                    if instr.opcode == IROpcode.CMP_GT: result = 1 if left > right else 0
+                    elif instr.opcode == IROpcode.CMP_LT: result = 1 if left < right else 0
+                    elif instr.opcode == IROpcode.CMP_GTE: result = 1 if left >= right else 0
+                    elif instr.opcode == IROpcode.CMP_LTE: result = 1 if left <= right else 0
+                    elif instr.opcode == IROpcode.CMP_EQ: result = 1 if left == right else 0
+                    elif instr.opcode == IROpcode.CMP_NEQ: result = 1 if left != right else 0
                     
-                    # Replace with direct assignment
-                    optimized.append(IRInstruction(
-                        IROpcode.ASSIGN,
-                        [instr.args[0], result],
-                        instr.lineno,
-                        f"constant folded: {left} {instr.opcode.name} {right}"
-                    ))
+                    optimized.append(IRInstruction(IROpcode.ASSIGN, [instr.args[0], result], instr.lineno, f"folded comparison: {left} {instr.opcode.name} {right}"))
                     continue
             
             optimized.append(instr)
@@ -209,19 +213,36 @@ class IRProgram:
         self.instructions = optimized
     
     def _merge_labels(self):
-        """Remove consecutive duplicate labels."""
+        """Remove consecutive duplicate labels and redirect jumps."""
+        label_map = {}  # old_label -> new_label
         optimized = []
-        last_was_label = False
         
-        for instr in self.instructions:
+        # 1. Identify clusters of consecutive labels
+        i = 0
+        while i < len(self.instructions):
+            instr = self.instructions[i]
             if instr.opcode == IROpcode.LABEL:
-                if last_was_label:
-                    continue  # Skip consecutive labels
-                last_was_label = True
+                survivor = instr.args[0]
+                optimized.append(instr)
+                i += 1
+                # Any labels immediately following this one are mapped to the survivor
+                while i < len(self.instructions) and self.instructions[i].opcode == IROpcode.LABEL:
+                    label_map[self.instructions[i].args[0]] = survivor
+                    i += 1
             else:
-                last_was_label = False
-            
-            optimized.append(instr)
+                optimized.append(instr)
+                i += 1
+        
+        # 2. Update all jump targets using the label_map
+        for instr in optimized:
+            if instr.opcode == IROpcode.JUMP:
+                target = instr.args[0]
+                if target in label_map:
+                    instr.args[0] = label_map[target]
+            elif instr.opcode in (IROpcode.JUMP_IF_ZERO, IROpcode.JUMP_IF_NOT_ZERO):
+                target = instr.args[1]
+                if target in label_map:
+                    instr.args[1] = label_map[target]
         
         self.instructions = optimized
 

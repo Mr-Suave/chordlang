@@ -1,24 +1,20 @@
-# Demo 4: Optimization Scope
-# Demonstrates Constant Folding and IR optimizations
+# Demo 4: Optimization Scope (Final)
+# This version triggers Label Merging to reduce instruction count.
 
-tempo = 100 + 20          # Should be folded to 120
-volume = 150 - 50         # Should be folded to 100
+# 1. Math Folding (Runtime speedup, same instruction count)
+tempo = 60 + 60
+volume = 100 + 20
 
-# Multiple operations to fold
-x = 10 + 20
-y = x + 5                 # x is known as 30, so y becomes 35 (if constant propagation is supported)
-                          # At minimum, '10 + 20' will be folded.
-
-# Modulo folding
-z = 10 % 3                # Should be folded to 1
-
-# Dead code after if/else blocks or loops can be checked in IR
+# 2. Nested Ifs (Structural cleanup - triggers _merge_labels)
+# This creates multiple 'endif' labels at the exact same location.
+# The optimizer will merge them, reducing the total instruction count.
 if 1 > 0 then {
-    play C4
-} else {
-    play D4               # The logic for jumps here often creates optimization opportunities
+    if 2 > 1 then {
+        if 3 > 2 then {
+            play C4:500
+        }
+    }
 }
 
-repeat 5 + 5 times {      # Folded to 10 times
-    play E4
-}
+# 3. Simple Play
+play E4:500
