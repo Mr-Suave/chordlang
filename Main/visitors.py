@@ -202,29 +202,25 @@ class SymbolTableBuilder(ASTVisitor):
     # In SymbolTableBuilder class only!
 
     def visit_RepeatNode(self, node: RepeatNode):
-        # Visit the count expression first (in current scope)
+        # Visit the count expression
         node.count.accept(self)
         
-        # Create unique scope name using line number
-        self.symbol_table.enter_scope(f"repeat_{node.lineno}")
+        # Process body in the same scope
         for stmt in node.body:
             stmt.accept(self)
-        self.symbol_table.exit_scope()
 
     def visit_IfNode(self, node: IfNode):
         # Check condition identifiers
         node.condition.accept(self)
 
-        self.symbol_table.enter_scope(f"if_then_{node.lineno}")
+        # Process then-body in the same scope
         for stmt in node.then_body:
             stmt.accept(self)
-        self.symbol_table.exit_scope()
 
+        # Process else-body in the same scope
         if node.else_body:
-            self.symbol_table.enter_scope(f"if_else_{node.lineno}")
             for stmt in node.else_body:
                 stmt.accept(self)
-            self.symbol_table.exit_scope()
 
     def visit_BinaryOpNode(self, node: BinaryOpNode):
         node.left.accept(self)
