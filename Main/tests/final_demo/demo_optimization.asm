@@ -18,11 +18,11 @@ section .data
 section .bss
     wav_header resb 44
     fd resd 1
+    var__t4 resq 1
     var__t2 resq 1
-    var__t3 resq 1
     var__t0 resq 1
     var__t1 resq 1
-    var__t4 resq 1
+    var__t3 resq 1
 
 section .text
 global _start

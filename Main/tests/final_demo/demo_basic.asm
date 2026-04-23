@@ -9,23 +9,18 @@ extern write_wav_header
 extern reset_buffer
 
 section .data
-    filename db 'demo_music.wav', 0
+    filename db 'demo_basic.wav', 0
     msg_done db 'Done generating WAV!', 10
     msg_done_len equ $ - msg_done
     freq_0 dd 261.63
-    freq_1 dd 329.63
-    freq_2 dd 392.00
-    freq_3 dd 523.25
-    freq_4 dd 246.94
-    freq_5 dd 293.66
+    freq_1 dd 293.66
+    freq_2 dd 329.63
+    freq_3 dd 349.23
+    freq_4 dd 392.00
+    freq_5 dd 440.00
     freq_6 dd 493.88
-    freq_7 dd 220.00
-    freq_8 dd 440.00
-    freq_9 dd 196.00
-    freq_10 dd 65.41
-    freq_11 dd 130.81
-    freq_12 dd 49.00
-    freq_13 dd 98.00
+    freq_7 dd 523.25
+    freq_8 dd 164.81
 
 section .bss
     wav_header resb 44
@@ -39,18 +34,17 @@ _start:
     ; Initialize runtime
     call init_audio_runtime
     ; Program start
-    ; Set tempo to 140
-    ; Tempo set to 140 (Informational only)
-    ; Set volume to 90
-    mov eax, 23220
+    ; Set tempo to 120
+    ; Tempo set to 120 (Informational only)
+    ; Set volume to 100
+    mov eax, 25800
     cvtsi2ss xmm0, eax
     call set_amplitude
-    ; Define sequence 'melody' with 16 items
-    ; Define chord 'c_bass' with 2 notes
-    ; Define chord 'g_bass' with 2 notes
     ; Set instrument to piano
     mov rdi, 0
     call set_instrument
+    ; Define sequence 'scale' with 8 items
+    ; Define chord 'c_maj' with 3 notes
     ; Initialize repeat counter to 2
     mov rax, 2
     mov qword [var__t0], rax
@@ -60,54 +54,45 @@ repeat_start0:
     mov rax, qword [var__t0]
     test rax, rax
     jz repeat_end1
-    ; Play sequence 'melody'
+    ; Play sequence 'scale'
     movss xmm0, dword [freq_0]
-    mov rdi, 250
+    mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_1]
-    mov rdi, 250
+    mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_2]
-    mov rdi, 250
+    mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_3]
     mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_4]
-    mov rdi, 250
+    mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_5]
-    mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_2]
-    mov rdi, 250
+    mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_6]
     mov rdi, 500
     call generate_note
     movss xmm0, dword [freq_7]
-    mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_0]
-    mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_1]
-    mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_8]
     mov rdi, 500
     call generate_note
-    movss xmm0, dword [freq_9]
+    ; Rest for 250ms
     mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_4]
-    mov rdi, 250
-    call generate_note
-    movss xmm0, dword [freq_5]
-    mov rdi, 250
+    call generate_rest
+    ; Play chord 'c_maj'
+    ; Limitation: Real chords should play all notes at the same time, not sequentially.
+    ; However, this runtime only supports single frequency output per note.
+    movss xmm0, dword [freq_0]
+    mov rdi, 1000
     call generate_note
     movss xmm0, dword [freq_2]
-    mov rdi, 500
+    mov rdi, 1000
+    call generate_note
+    movss xmm0, dword [freq_4]
+    mov rdi, 1000
     call generate_note
     ; Decrement counter
     mov rax, qword [var__t0]
@@ -123,63 +108,12 @@ repeat_end1:
     ; Set instrument to guitar
     mov rdi, 1
     call set_instrument
-    ; Set volume to 110
-    mov eax, 28380
+    ; Set volume to 80
+    mov eax, 20640
     cvtsi2ss xmm0, eax
     call set_amplitude
-    ; Play note C4
-    movss xmm0, dword [freq_0]
-    mov rdi, 1000
-    call generate_note
-    ; Play note E4
-    movss xmm0, dword [freq_1]
-    mov rdi, 1000
-    call generate_note
-    ; Play note G4
-    movss xmm0, dword [freq_2]
-    mov rdi, 1000
-    call generate_note
-    ; Set instrument to drums_kick
-    mov rdi, 5
-    call set_instrument
-    ; Rest for 0ms
-    mov rdi, 0
-    call generate_rest
-    ; Rest for 500ms
-    mov rdi, 500
-    call generate_rest
-    ; Rest for 0ms
-    mov rdi, 0
-    call generate_rest
-    ; Rest for 500ms
-    mov rdi, 500
-    call generate_rest
-    ; Set instrument to bass
-    mov rdi, 2
-    call set_instrument
-    ; Set volume to 120
-    mov eax, 30960
-    cvtsi2ss xmm0, eax
-    call set_amplitude
-    ; Play chord 'c_bass'
-    ; Limitation: Real chords should play all notes at the same time, not sequentially.
-    ; However, this runtime only supports single frequency output per note.
-    movss xmm0, dword [freq_10]
-    mov rdi, 1000
-    call generate_note
-    movss xmm0, dword [freq_11]
-    mov rdi, 1000
-    call generate_note
-    ; Rest for 250ms
-    mov rdi, 250
-    call generate_rest
-    ; Play chord 'g_bass'
-    ; Limitation: Real chords should play all notes at the same time, not sequentially.
-    ; However, this runtime only supports single frequency output per note.
-    movss xmm0, dword [freq_12]
-    mov rdi, 1000
-    call generate_note
-    movss xmm0, dword [freq_13]
+    ; Play note E3
+    movss xmm0, dword [freq_8]
     mov rdi, 1000
     call generate_note
     ; Program end
